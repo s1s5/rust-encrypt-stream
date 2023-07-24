@@ -37,7 +37,11 @@ impl<R: AsyncRead + Unpin> AsyncRead for DecStream<R> {
         buf: &mut ReadBuf<'_>,
     ) -> Poll<io::Result<()>> {
         ready!(Pin::new(&mut self.reader).poll_read(cx, buf))?;
-        self.cipher.apply_keystream(buf.filled_mut());
+        tracing::trace!("read<[raw] {:?}", buf.filled());
+        if buf.filled().len() > 0 {
+            self.cipher.apply_keystream(buf.filled_mut());
+        }
+        tracing::trace!("read<[encrypted] {:?}", buf.filled());
         Poll::Ready(Ok(()))
     }
 }
@@ -71,12 +75,17 @@ impl<W: AsyncWrite + Unpin> EncStream<W> {
     ) -> Poll<Result<usize, io::Error>> {
         let s = std::cmp::min(buf.len(), inner_buffer.len() - self.end);
 
+        tracing::trace!("write<[raw] {:?}", &buf[..s]);
         inner_buffer[self.end..self.end + s].copy_from_slice(&buf[..s]);
         self.cipher
             .apply_keystream(&mut inner_buffer[self.end..self.end + s]);
         self.end += s;
 
         if self.start < self.end {
+            tracing::trace!(
+                "write<[encrypted] {:?}",
+                &inner_buffer[self.start..self.end]
+            );
             let n = ready!(
                 Pin::new(&mut self.writer).poll_write(cx, &inner_buffer[self.start..self.end])
             )?;
