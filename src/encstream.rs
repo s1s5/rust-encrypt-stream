@@ -15,6 +15,9 @@ use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
 type Cipher = StreamCipherCoreWrapper<ChaChaCore<UInt<UInt<UInt<UInt<UTerm, B1>, B0>, B1>, B0>>>;
 
+// ----------------------------------------------------------------------------
+// decoder
+// ----------------------------------------------------------------------------
 pub struct DecStream<R: AsyncRead + Unpin> {
     reader: R,
     // StreamCipherCoreWrapper<ChaCha20> not working..
@@ -37,15 +40,26 @@ impl<R: AsyncRead + Unpin> AsyncRead for DecStream<R> {
         buf: &mut ReadBuf<'_>,
     ) -> Poll<io::Result<()>> {
         ready!(Pin::new(&mut self.reader).poll_read(cx, buf))?;
-        tracing::trace!("read<[raw] {:?}", buf.filled());
+        tracing::trace!(
+            "read<[raw] {}[bytes] {:?}",
+            buf.filled().len(),
+            &buf.filled()[0..std::cmp::min(buf.filled().len(), 128)]
+        );
         if buf.filled().len() > 0 {
             self.cipher.apply_keystream(buf.filled_mut());
         }
-        tracing::trace!("read<[encrypted] {:?}", buf.filled());
+        tracing::trace!(
+            "read<[encrypted] {}[bytes] {:?}",
+            buf.filled().len(),
+            &buf.filled()[0..std::cmp::min(buf.filled().len(), 128)]
+        );
         Poll::Ready(Ok(()))
     }
 }
 
+// ----------------------------------------------------------------------------
+// encoder
+// ----------------------------------------------------------------------------
 pub struct EncStream<W: AsyncWrite + Unpin> {
     writer: W,
     cipher: Cipher,
