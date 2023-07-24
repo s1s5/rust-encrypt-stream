@@ -123,7 +123,7 @@ mod tests {
     use tokio::io::AsyncWriteExt;
 
     #[tokio::test]
-    async fn tee() -> anyhow::Result<()> {
+    async fn enc() -> anyhow::Result<()> {
         let mut buffer = Vec::new();
         let mut writer = io::Cursor::new(&mut buffer);
 
